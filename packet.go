@@ -111,7 +111,7 @@ func (packet *Packet) Read() ([]byte, error) {
 		}
 		l, err := packet.conn.Read(packet.b)
 		if err != nil {
-			return b, err
+			return packet.b, err
 		}
 		//取到的数据写入缓冲区
 		binary.Write(packet.ioBuffer, packet.Endian, packet.b[:l])
