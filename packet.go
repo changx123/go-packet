@@ -17,7 +17,9 @@ type Packet struct {
 	iol int32
 	//协议长度记录
 	l int32
-	//每次写入buffer长度 默认1024
+	//读取数据
+	b []byte
+	//每次写入buffer长度 默认0 如果0不进行分包发送 直接交给socket进行处理
 	WriteBufferSize int32
 	//端序设置 (binary.BigEndian 大端序 ， binary.LittleEndian 小端序)默认大端序
 	Endian binary.ByteOrder
@@ -30,9 +32,9 @@ func (packet *Packet) NewConn(conn net.Conn) {
 		packet.ReadBufferSize = 1024
 	}
 	//设置写入长度默认值
-	if packet.WriteBufferSize == int32(0) {
-		packet.WriteBufferSize = 1024
-	}
+	//if packet.WriteBufferSize == 0 {
+	//	packet.WriteBufferSize = 1024
+	//}
 	//设置端序默认值
 	if packet.Endian == nil {
 		packet.Endian = binary.BigEndian
@@ -41,6 +43,8 @@ func (packet *Packet) NewConn(conn net.Conn) {
 	if packet.ioBuffer == nil {
 		packet.ioBuffer = bytes.NewBuffer([]byte{})
 	}
+	//分配读取数据变量内存
+	packet.b = make([]byte,packet.ReadBufferSize)
 	packet.conn = conn
 }
 
@@ -48,8 +52,12 @@ func (packet *Packet) NewConn(conn net.Conn) {
 func (packet *Packet) Write(b []byte) (int, error) {
 	//数据长度
 	l := len(b)
+	//不进行分包发送
 	//写入数据长度到开头([] [] [] [] ......)
 	buf := lWrite(b, l, packet.Endian)
+	if packet.WriteBufferSize == 0 {
+		return packet.conn.Write(buf.Bytes())
+	}
 	return packet.bWrite(buf, l+4)
 }
 
@@ -63,7 +71,7 @@ func lWrite(b []byte, l int, endian binary.ByteOrder) *bytes.Buffer {
 	return newBuffer
 }
 
-//分段数据计算
+//发送数据  | 分段数据计算
 func (packet *Packet) bWrite(buf *bytes.Buffer, l int) (int, error) {
 	//创建取数据变量
 	var q []byte
@@ -93,7 +101,6 @@ func (packet *Packet) bWrite(buf *bytes.Buffer, l int) (int, error) {
 
 //读取数据
 func (packet *Packet) Read() ([]byte, error) {
-	b := make([]byte, packet.ReadBufferSize)
 	for {
 		//检查上次是否还存在未获取完的数据
 		if packet.l != 0 && packet.iol >= packet.l {
@@ -102,12 +109,12 @@ func (packet *Packet) Read() ([]byte, error) {
 				return d, nil
 			}
 		}
-		l, err := packet.conn.Read(b)
+		l, err := packet.conn.Read(packet.b)
 		if err != nil {
 			return b, err
 		}
 		//取到的数据写入缓冲区
-		binary.Write(packet.ioBuffer, packet.Endian, b[:l])
+		binary.Write(packet.ioBuffer, packet.Endian, packet.b[:l])
 		//增加缓冲区长度
 		packet.iol += int32(l)
 		if packet.iol > 4 {
@@ -125,7 +132,7 @@ func (packet *Packet) bRead() (int, []byte) {
 		packet.getPacketLen()
 	}
 	//缓冲区长度 足够数据长度
-	if packet.iol >= packet.l{
+	if packet.iol >= packet.l {
 		var b []byte
 		//开辟需要获取数据的长度
 		b = make([]byte, packet.l)
@@ -136,7 +143,7 @@ func (packet *Packet) bRead() (int, []byte) {
 		if int32(l) == packet.l {
 			//缓冲区长度减去本次数据长度
 			packet.iol -= packet.l
- 			//本次数据长度重置
+			//本次数据长度重置
 			packet.l = 0
 			//如果大于4位 取文件头
 			if packet.iol >= 4 {
@@ -149,7 +156,7 @@ func (packet *Packet) bRead() (int, []byte) {
 }
 
 //获取协议长度
-func (packet *Packet) getPacketLen()  {
+func (packet *Packet) getPacketLen() {
 	//获取协议长度
 	binary.Read(packet.ioBuffer, packet.Endian, &packet.l)
 	packet.iol -= 4
