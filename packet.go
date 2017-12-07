@@ -44,11 +44,7 @@ func (packet *Packet) NewConn(conn net.Conn) {
 		packet.ioBuffer = bytes.NewBuffer([]byte{})
 	}
 	//分配读取数据变量内存
-<<<<<<< HEAD
-	packet.b = make([]byte,packet.ReadBufferSize)
-=======
 	packet.b = make([]byte, packet.ReadBufferSize)
->>>>>>> 4cc8ff50edf48d65a4a0dc32166d50b51ee75ed7
 	packet.conn = conn
 }
 
@@ -59,10 +55,7 @@ func (packet *Packet) Write(b []byte) (int, error) {
 	//不进行分包发送
 	//写入数据长度到开头([] [] [] [] ......)
 	buf := lWrite(b, l, packet.Endian)
-<<<<<<< HEAD
-=======
 	//不进行分包发送
->>>>>>> 4cc8ff50edf48d65a4a0dc32166d50b51ee75ed7
 	if packet.WriteBufferSize == 0 {
 		return packet.conn.Write(buf.Bytes())
 	}
